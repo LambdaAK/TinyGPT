@@ -699,10 +699,51 @@ def generate_and_save(
 
 
 if __name__ == "__main__":
-    print("Sample examples (CLIENT/OUTPUT conversation format):\n")
-    for i, conv in enumerate(
-        generate_dataset(n=10, seed=42, output_format="conversation")
-    ):
-        print(f"--- Example {i + 1} ---")
-        print(conv)
+    import argparse
+    import os
+
+    parser = argparse.ArgumentParser(description="Generate WorldLLM data splits")
+    parser.add_argument("--train", type=int, default=20_000, help="Number of training examples")
+    parser.add_argument("--val", type=int, default=2_000, help="Number of validation examples")
+    parser.add_argument("--test", type=int, default=2_000, help="Number of test examples")
+    parser.add_argument("--outdir", type=str, default="data", help="Output directory")
+    parser.add_argument("--format", type=str, default="conversation",
+                        choices=["conversation", "structured", "llm", "text"],
+                        help="Output format")
+    parser.add_argument("--preview", type=int, default=0,
+                        help="Just print N examples instead of writing splits")
+    args = parser.parse_args()
+
+    if args.preview > 0:
+        print("Sample examples (CLIENT/OUTPUT conversation format):\n")
+        for i, conv in enumerate(
+            generate_dataset(n=args.preview, seed=42, output_format="conversation")
+        ):
+            print(f"--- Example {i + 1} ---")
+            print(conv)
+            print()
+    else:
+        from vocabulary import VOCAB_SIZE, get_vocab_stats
+
+        os.makedirs(args.outdir, exist_ok=True)
+
+        splits = [
+            ("train", args.train, 42),
+            ("val", args.val, 123),
+            ("test", args.test, 456),
+        ]
+
+        stats = get_vocab_stats()
+        print(f"Vocabulary: {VOCAB_SIZE} tokens ({stats['people']} people, "
+              f"{stats['objects']} objects, {stats['verbs']} verbs)")
+        print(f"Format: {args.format}")
         print()
+
+        for name, n, seed in splits:
+            path = os.path.join(args.outdir, f"{name}.txt")
+            print(f"Generating {name}: {n} examples (seed={seed})...", end=" ", flush=True)
+            generate_and_save(path, n=n, seed=seed, output_format=args.format)
+            size_kb = os.path.getsize(path) / 1024
+            print(f"done -> {path} ({size_kb:.1f} KB)")
+
+        print(f"\nAll splits saved to {args.outdir}/")

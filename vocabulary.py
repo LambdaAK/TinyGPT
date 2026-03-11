@@ -57,9 +57,10 @@ COMMON = [
     "is", "are", "was", "were", "be", "been",
     "in", "on", "at", "here", "there",
     "yes", "no", "not", "all", "both",
-    "one", "two", "first", "last",
+    "one", "two", "three", "four", "first", "last",
+    "many", "things", "none", "nothing",
     "answer", "question", "scenario", "based", "following",
-    "Okay", "got",  # for "Okay, got it."
+    "Okay", "got",
 ]
 
 # Punctuation (handled as tokens)

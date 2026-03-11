@@ -9,10 +9,10 @@ from dataclasses import dataclass
 class ModelConfig:
     vocab_size: int = 137
     max_seq_len: int = 256
-    embed_dim: int = 192
-    num_heads: int = 6
-    num_layers: int = 6
-    ffn_dim: int = 768
+    embed_dim: int = 256
+    num_heads: int = 8
+    num_layers: int = 8
+    ffn_dim: int = 1024
     dropout: float = 0.1
 
 

@@ -1,6 +1,16 @@
 """
-Limited vocabulary for the possession-tracking transformer.
-~150 words covering people, objects, actions, questions, and grammar.
+Closed vocabulary for the possession-tracking transformer.
+
+Defines a fixed ~137-token vocabulary covering people, objects, verbs,
+question words, and basic grammar. Because the vocabulary is small and
+known ahead of time, we use simple whitespace + punctuation splitting
+rather than subword tokenization (BPE/SentencePiece).
+
+Exports:
+    VOCAB, WORD_TO_ID, ID_TO_WORD, VOCAB_SIZE — vocabulary mappings
+    PAD_ID, SOS_ID, EOS_ID, UNK_ID, CLIENT_ID, OUTPUT_ID — special token IDs
+    tokenize / detokenize — string <-> token ID conversion
+    is_valid_sentence — check if all words are in-vocabulary
 """
 
 from typing import Optional
@@ -68,6 +78,7 @@ PUNCTUATION = [".", "?", "!"]
 
 # Build full vocabulary
 def _build_vocab() -> list[str]:
+    """Assemble the full vocabulary list, deduplicating by lowercase form."""
     parts = [
         SPECIAL_TOKENS,
         PEOPLE,
@@ -136,10 +147,11 @@ def _split_punct(word: str) -> list[str]:
 
 
 def tokenize(text: str, add_special: bool = True) -> list[int]:
-    """
-    Tokenize a string into token IDs.
-    Punctuation is split into separate tokens.
-    Unknown words are mapped to <unk>.
+    """Convert a string to a list of token IDs.
+
+    Splits on whitespace, separates trailing punctuation into its own token,
+    and wraps with <sos>/<eos> when add_special is True. Words not in the
+    vocabulary are mapped to <unk> (case-insensitive fallback is attempted).
     """
     words = text.strip().split()
     ids = []

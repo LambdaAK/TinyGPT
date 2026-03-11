@@ -1,6 +1,11 @@
 """
 Training script for TinyGPT.
 
+Runs an infinite training loop (Ctrl+C to stop) with cosine LR schedule,
+masked loss (only OUTPUT tokens contribute), and automatic checkpointing.
+On CUDA GPUs the script enables FlashAttention-2, bfloat16 mixed precision,
+TF32 matmuls, torch.compile, and fused AdamW.
+
 Usage:
     python train.py
     python train.py --epochs 30 --batch_size 32 --lr 1e-4
@@ -19,6 +24,7 @@ from vocabulary import PAD_ID, VOCAB_SIZE
 
 
 def get_device(preference: str) -> torch.device:
+    """Resolve device string to a torch.device, preferring cuda > mps > cpu when 'auto'."""
     if preference == "auto":
         if torch.cuda.is_available():
             return torch.device("cuda")
@@ -44,7 +50,11 @@ def configure_a100_optimizations(device: torch.device):
 
 
 def masked_loss(logits, targets, loss_mask):
-    """Compute cross-entropy only on positions where loss_mask == 1."""
+    """Compute cross-entropy only on OUTPUT positions (loss_mask == 1).
+
+    Returns (summed_loss, token_count) so the caller can normalize.
+    Padding tokens are separately excluded via ignore_index.
+    """
     per_token_loss = nn.functional.cross_entropy(
         logits.view(-1, logits.size(-1)),
         targets.view(-1),
@@ -60,6 +70,7 @@ def masked_loss(logits, targets, loss_mask):
 
 
 def evaluate(model, dataloader, device):
+    """Run the model over a full dataloader and return (avg_loss, perplexity)."""
     model.eval()
     total_loss = 0.0
     total_tokens = 0
@@ -81,6 +92,7 @@ def evaluate(model, dataloader, device):
 
 
 def train(model_config: ModelConfig, train_config: TrainConfig):
+    """Main training loop. Runs indefinitely, saving best/latest checkpoints each epoch."""
     device = get_device(train_config.device)
     print(f"Device: {device}")
 

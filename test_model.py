@@ -1,4 +1,9 @@
-"""Quick non-interactive test: run a few conversations through the model."""
+"""Non-interactive smoke test for a trained TinyGPT checkpoint.
+
+Loads checkpoints/best.pt and runs five scripted multi-turn conversations
+covering possession, transfers, counting, and yes/no questions.
+Prints each CLIENT/OUTPUT exchange so you can visually verify correctness.
+"""
 
 import torch
 from model import TinyGPT
@@ -15,6 +20,7 @@ print(f"Model: epoch {checkpoint.get('epoch','?')}, val_loss {checkpoint.get('va
 
 
 def chat(messages):
+    """Run a multi-turn conversation and print each exchange."""
     history = []
     for msg in messages:
         token_ids = build_conversation_tokens(history, msg)

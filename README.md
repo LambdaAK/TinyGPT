@@ -42,6 +42,46 @@ python interact.py
 python test_model.py
 ```
 
+## Example conversation
+
+```
+CLIENT:
+Alice has the ball.
+
+OUTPUT:
+Got it.
+
+CLIENT:
+Bob has the key.
+
+OUTPUT:
+Got it.
+
+CLIENT:
+Alice gives the ball to Bob.
+
+OUTPUT:
+Got it.
+
+CLIENT:
+Who has the ball?
+
+OUTPUT:
+Bob has the ball.
+
+CLIENT:
+What does Bob have?
+
+OUTPUT:
+the ball and the key.
+
+CLIENT:
+How many things does Alice have?
+
+OUTPUT:
+none.
+```
+
 ## Architecture
 
 - GPT-style decoder-only transformer

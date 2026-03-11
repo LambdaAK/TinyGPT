@@ -1,7 +1,18 @@
 """
-Synthetic data generator for possession-tracking.
-Supports: compound possession, transfers, multi-hop transfers,
-yes/no questions, "who has what?", and counting.
+Synthetic data generator for possession-tracking conversations.
+
+Produces multi-turn CLIENT:/OUTPUT: conversations where people are assigned
+objects, transfer them, and answer questions. Each conversation maintains a
+ground-truth PossessionState so answers are always correct.
+
+Supports: simple possession ("Alice has the ball"), compound possession
+("Alice has the ball and the key"), transfers ("Alice gives the ball to Bob"),
+multi-hop transfers, and five question types (who_has, what_has, yes_no,
+who_has_what, how_many).
+
+Usage:
+    python data_generator.py --train 200000 --val 2000 --test 2000 --outdir data
+    python data_generator.py --preview 5
 """
 
 import argparse
@@ -22,7 +33,11 @@ QUESTION_TYPES = ["who_has", "what_has", "yes_no", "who_has_what", "how_many"]
 
 
 class PossessionState:
-    """Tracks who has what. person -> set of objects."""
+    """Ground-truth tracker for object ownership (person -> set of objects).
+
+    Used during data generation to produce correct answers for questions.
+    Supports give, transfer, and various query operations.
+    """
 
     def __init__(self):
         self.holders: dict = {}
@@ -173,9 +188,15 @@ def _add_question(state: PossessionState, turns: List[Tuple[str, str]],
 
 
 def generate_conversation_example() -> Optional[Tuple[List[Tuple[str, str]], PossessionState]]:
-    """
-    Generate a conversation as a sequence of interleaved events:
-    possession statements, transfers, and questions at any point.
+    """Generate a single randomized conversation.
+
+    Structure:
+      Phase 1 — Initial possessions: each sampled person gets at least one object.
+      Phase 2 — Interleaved actions: random mix of questions, transfers, and
+                additional possessions (0-4 extra actions).
+      Phase 3 — 80% chance of a final question to close the conversation.
+
+    Returns None if the conversation would be too short (< 2 turns).
     """
     num_people = random.randint(1, len(PEOPLE))
     people = random.sample(PEOPLE, num_people)
@@ -235,6 +256,7 @@ def generate_dataset(
     seed: Optional[int] = None,
     **kwargs,
 ) -> Iterator:
+    """Yield n formatted conversation strings, skipping any with out-of-vocabulary words."""
     if seed is not None:
         random.seed(seed)
 
@@ -270,6 +292,7 @@ def generate_and_save(
     seed: int = 42,
     **kwargs,
 ) -> None:
+    """Generate n conversations and write them to a file, separated by '---'."""
     with open(output_path, "w") as f:
         first = True
         for item in generate_dataset(n=n, seed=seed):

@@ -70,6 +70,11 @@ def pick_checkpoint(checkpoint_dir: str = "checkpoints") -> str:
 
 
 def load_model(checkpoint_path: str, device: torch.device):
+    """Load a TinyGPT model from a training checkpoint.
+
+    Checkpoints are dicts with keys: model_state_dict, config, epoch, val_loss.
+    Returns (model, config) with the model in eval mode.
+    """
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     config = checkpoint["config"]
     model = TinyGPT(config).to(device)
@@ -105,7 +110,12 @@ def build_conversation_tokens(turns, current_client_msg):
 
 
 def generate_response(model, token_ids, config, device, temperature=0.8, top_k=20, max_tokens=40):
-    """Generate model response tokens until CLIENT: or <eos>."""
+    """Generate model response tokens until CLIENT:, <eos>, or max_tokens.
+
+    Unlike TinyGPT.generate(), this function returns only the newly generated
+    token IDs (not the full sequence) and treats CLIENT: as a stop token so
+    the model doesn't hallucinate the next user turn.
+    """
     input_tensor = torch.tensor([token_ids], dtype=torch.long, device=device)
 
     model.eval()

@@ -53,19 +53,19 @@ python test_model.py     # quick smoke test
 
 ```
 CLIENT:
-Alice has the ball.
+Alice has the ball and 5 apples. Bob has the key. Charlie has the clock and 3 oranges.
 
 OUTPUT:
 Got it.
 
 CLIENT:
-Bob has the key.
+Alice gives the ball to Charlie. Bob gives the key to Alice. Alice gives 2 apples to Bob.
 
 OUTPUT:
 Got it.
 
 CLIENT:
-Alice gives the ball to Bob.
+Charlie gives the clock to Bob.
 
 OUTPUT:
 Got it.
@@ -74,19 +74,31 @@ CLIENT:
 Who has the ball?
 
 OUTPUT:
-Bob has the ball.
+Charlie has the ball.
 
 CLIENT:
-What does Bob have?
+What does Alice have?
 
 OUTPUT:
-the ball and the key.
+three apples and the key.
 
 CLIENT:
-How many things does Alice have?
+How many apples does Bob have?
 
 OUTPUT:
-none.
+two.
+
+CLIENT:
+Bob gives the clock to Alice. Who has the clock now?
+
+OUTPUT:
+Alice has the clock.
+
+CLIENT:
+Who has the most oranges?
+
+OUTPUT:
+Charlie.
 ```
 
 ## Architecture

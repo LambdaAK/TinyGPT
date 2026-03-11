@@ -12,6 +12,8 @@ Type 'reset' to clear the conversation, 'quit' to exit.
 """
 
 import argparse
+import glob
+import os
 import torch
 from model import WorldLLM
 from config import ModelConfig
@@ -22,15 +24,60 @@ from vocabulary import (
 )
 
 
+def list_checkpoints(checkpoint_dir: str = "checkpoints"):
+    """Find all .pt files in the checkpoint directory and return info about each."""
+    pattern = os.path.join(checkpoint_dir, "*.pt")
+    files = sorted(glob.glob(pattern), key=os.path.getmtime, reverse=True)
+    checkpoints = []
+    for path in files:
+        try:
+            meta = torch.load(path, map_location="cpu", weights_only=False)
+            epoch = meta.get("epoch", "?")
+            val_loss = meta.get("val_loss", "?")
+            if isinstance(val_loss, float):
+                val_loss = f"{val_loss:.4f}"
+            checkpoints.append((path, epoch, val_loss))
+        except Exception:
+            checkpoints.append((path, "?", "?"))
+    return checkpoints
+
+
+def pick_checkpoint(checkpoint_dir: str = "checkpoints") -> str:
+    """List available checkpoints and let the user pick one."""
+    checkpoints = list_checkpoints(checkpoint_dir)
+    if not checkpoints:
+        print(f"No checkpoints found in {checkpoint_dir}/")
+        raise SystemExit(1)
+
+    print("Available checkpoints:\n")
+    for i, (path, epoch, val_loss) in enumerate(checkpoints):
+        name = os.path.basename(path)
+        print(f"  [{i + 1}] {name}  (epoch {epoch}, val_loss {val_loss})")
+    print()
+
+    while True:
+        try:
+            choice = input(f"Select checkpoint [1-{len(checkpoints)}]: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            raise SystemExit(0)
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(checkpoints):
+                return checkpoints[idx][0]
+        except ValueError:
+            pass
+        print(f"  Please enter a number between 1 and {len(checkpoints)}")
+
+
 def load_model(checkpoint_path: str, device: torch.device):
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     config = checkpoint["config"]
     model = WorldLLM(config).to(device)
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
-    step = checkpoint.get("step", "?")
+    epoch = checkpoint.get("epoch", "?")
     val_loss = checkpoint.get("val_loss", "?")
-    print(f"Loaded model from {checkpoint_path} (step {step}, val_loss {val_loss})")
+    print(f"Loaded {os.path.basename(checkpoint_path)} (epoch {epoch}, val_loss {val_loss})")
     print(f"Parameters: {model.count_parameters():,}")
     return model, config
 
@@ -91,10 +138,12 @@ def generate_response(model, token_ids, config, device, temperature=0.8, top_k=2
 
 def main():
     parser = argparse.ArgumentParser(description="Chat with WorldLLM")
-    parser.add_argument("--checkpoint", type=str, default="checkpoints/best.pt",
-                        help="Path to model checkpoint")
-    parser.add_argument("--temperature", type=float, default=0.8)
-    parser.add_argument("--top_k", type=int, default=20)
+    parser.add_argument("--checkpoint", type=str, default=None,
+                        help="Path to checkpoint (if not set, shows a picker)")
+    parser.add_argument("--checkpoint_dir", type=str, default="checkpoints",
+                        help="Directory to scan for checkpoints")
+    parser.add_argument("--temperature", type=float, default=0.1)
+    parser.add_argument("--top_k", type=int, default=5)
     parser.add_argument("--device", type=str, default="auto")
     args = parser.parse_args()
 
@@ -108,7 +157,8 @@ def main():
     else:
         device = torch.device(args.device)
 
-    model, config = load_model(args.checkpoint, device)
+    checkpoint_path = args.checkpoint or pick_checkpoint(args.checkpoint_dir)
+    model, config = load_model(checkpoint_path, device)
     print(f"Device: {device}")
     print()
     print("WorldLLM Interactive Chat")

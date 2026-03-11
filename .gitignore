@@ -5,11 +5,9 @@ dist/
 build/
 .eggs/
 
-*.pt
 *.pth
 *.bin
 *.onnx
-checkpoints/
 
 data/
 *.tsv

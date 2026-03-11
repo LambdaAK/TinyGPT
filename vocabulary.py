@@ -9,19 +9,11 @@ from typing import Optional
 # CLIENT: and OUTPUT: are message separators for the conversation format
 SPECIAL_TOKENS = ["<pad>", "<sos>", "<eos>", "<unk>", "CLIENT:", "OUTPUT:"]
 
-# People (10)
-PEOPLE = [
-    "Alice", "Bob", "Carol", "Dave", "Eve",
-    "Frank", "Grace", "Henry", "Ivy", "Jack",
-]
+# People
+PEOPLE = ["Alice", "Bob", "Charlie"]
 
-# Objects (30)
-OBJECTS = [
-    "ball", "banana", "apple", "book", "key", "hat", "cup",
-    "pen", "phone", "bag", "box", "chair", "table",
-    "car", "bike", "dog", "cat", "flower", "ring",
-    "coin", "card", "letter", "gift",     "toy", "stick", "rope", "bell", "lamp", "clock",
-]
+# Objects
+OBJECTS = ["ball", "key", "clock", "book"]
 
 # Verbs for possession/transfer
 VERBS = [
@@ -118,9 +110,34 @@ CLIENT_ID = WORD_TO_ID["CLIENT:"]
 OUTPUT_ID = WORD_TO_ID["OUTPUT:"]
 
 
+_PUNCT = set(".,?!")
+
+
+def _split_punct(word: str) -> list[str]:
+    """Split trailing punctuation off a word: 'ball.' -> ['ball', '.']"""
+    if not word:
+        return []
+    tokens = []
+    # strip leading punctuation (rare but safe)
+    i = 0
+    while i < len(word) and word[i] in _PUNCT:
+        tokens.append(word[i])
+        i += 1
+    core = []
+    j = len(word)
+    while j > i and word[j - 1] in _PUNCT:
+        j -= 1
+    if i < j:
+        tokens.append(word[i:j])
+    for k in range(j, len(word)):
+        tokens.append(word[k])
+    return tokens
+
+
 def tokenize(text: str, add_special: bool = True) -> list[int]:
     """
     Tokenize a string into token IDs.
+    Punctuation is split into separate tokens.
     Unknown words are mapped to <unk>.
     """
     words = text.strip().split()
@@ -128,14 +145,11 @@ def tokenize(text: str, add_special: bool = True) -> list[int]:
     if add_special:
         ids.append(SOS_ID)
     for w in words:
-        # Normalize: lowercase for lookup, but we store canonical form
-        w_clean = w.strip(".,?!")
-        if not w_clean:
-            continue
-        token_id = WORD_TO_ID.get(w_clean, UNK_ID)
-        if token_id == UNK_ID:
-            token_id = WORD_TO_ID.get(w_clean.lower(), UNK_ID)
-        ids.append(token_id)
+        for part in _split_punct(w):
+            token_id = WORD_TO_ID.get(part, UNK_ID)
+            if token_id == UNK_ID:
+                token_id = WORD_TO_ID.get(part.lower(), UNK_ID)
+            ids.append(token_id)
     if add_special:
         ids.append(EOS_ID)
     return ids
@@ -159,9 +173,9 @@ def is_valid_sentence(text: str) -> tuple[bool, list[str]]:
     words = text.strip().split()
     unknown = []
     for w in words:
-        w_clean = w.strip(".,?!").lower()
-        if w_clean and w_clean not in WORD_TO_ID:
-            unknown.append(w_clean)
+        for part in _split_punct(w):
+            if part.lower() not in WORD_TO_ID:
+                unknown.append(part)
     return len(unknown) == 0, unknown
 
 

@@ -27,20 +27,36 @@ def get_device(preference: str) -> torch.device:
     return torch.device(preference)
 
 
+def masked_loss(logits, targets, loss_mask):
+    """Compute cross-entropy only on positions where loss_mask == 1."""
+    per_token_loss = nn.functional.cross_entropy(
+        logits.view(-1, logits.size(-1)),
+        targets.view(-1),
+        ignore_index=PAD_ID,
+        reduction="none",
+    )
+    flat_mask = loss_mask.view(-1)
+    masked = per_token_loss * flat_mask
+    num_tokens = flat_mask.sum()
+    if num_tokens == 0:
+        return masked.sum(), 0
+    return masked.sum(), num_tokens.item()
+
+
 def evaluate(model, dataloader, device):
     model.eval()
     total_loss = 0.0
     total_tokens = 0
-    criterion = nn.CrossEntropyLoss(ignore_index=PAD_ID, reduction="sum")
 
     with torch.no_grad():
-        for inputs, targets in dataloader:
-            inputs, targets = inputs.to(device), targets.to(device)
+        for inputs, targets, loss_mask in dataloader:
+            inputs = inputs.to(device)
+            targets = targets.to(device)
+            loss_mask = loss_mask.to(device)
             logits = model(inputs)
-            loss = criterion(logits.view(-1, logits.size(-1)), targets.view(-1))
-            num_tokens = (targets != PAD_ID).sum().item()
+            loss, n = masked_loss(logits, targets, loss_mask)
             total_loss += loss.item()
-            total_tokens += num_tokens
+            total_tokens += n
 
     avg_loss = total_loss / max(total_tokens, 1)
     perplexity = min(torch.exp(torch.tensor(avg_loss)).item(), 1e6)
@@ -78,65 +94,45 @@ def train(model_config: ModelConfig, train_config: TrainConfig):
         lr=train_config.learning_rate,
         weight_decay=train_config.weight_decay,
     )
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=train_config.epochs * len(train_loader)
-    )
-    criterion = nn.CrossEntropyLoss(ignore_index=PAD_ID)
 
     os.makedirs(train_config.save_dir, exist_ok=True)
     best_val_loss = float("inf")
-    global_step = 0
 
-    for epoch in range(1, train_config.epochs + 1):
+    epoch = 0
+    while True:
+        epoch += 1
         model.train()
         epoch_loss = 0.0
         epoch_tokens = 0
         t0 = time.time()
 
-        for batch_idx, (inputs, targets) in enumerate(train_loader):
-            inputs, targets = inputs.to(device), targets.to(device)
+        for inputs, targets, loss_mask in train_loader:
+            inputs = inputs.to(device)
+            targets = targets.to(device)
+            loss_mask = loss_mask.to(device)
 
             logits = model(inputs)
-            loss = criterion(logits.view(-1, logits.size(-1)), targets.view(-1))
+            loss, n = masked_loss(logits, targets, loss_mask)
+            if n > 0:
+                loss = loss / n
+            else:
+                continue
 
             optimizer.zero_grad()
             loss.backward()
             if train_config.grad_clip > 0:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), train_config.grad_clip)
             optimizer.step()
-            scheduler.step()
 
-            num_tokens = (targets != PAD_ID).sum().item()
-            epoch_loss += loss.item() * num_tokens
-            epoch_tokens += num_tokens
-            global_step += 1
-
-            if global_step % train_config.log_interval == 0:
-                avg = epoch_loss / max(epoch_tokens, 1)
-                lr = scheduler.get_last_lr()[0]
-                print(f"  step {global_step} | loss {avg:.4f} | lr {lr:.2e}")
-
-            if global_step % train_config.eval_interval == 0:
-                val_loss, val_ppl = evaluate(model, val_loader, device)
-                print(f"  [eval] step {global_step} | val_loss {val_loss:.4f} | val_ppl {val_ppl:.2f}")
-
-                if val_loss < best_val_loss:
-                    best_val_loss = val_loss
-                    path = os.path.join(train_config.save_dir, "best.pt")
-                    torch.save({
-                        "model_state_dict": model.state_dict(),
-                        "config": model_config,
-                        "step": global_step,
-                        "val_loss": val_loss,
-                    }, path)
-                    print(f"  [saved] best model -> {path}")
+            epoch_loss += loss.item() * n
+            epoch_tokens += n
 
         elapsed = time.time() - t0
-        avg_loss = epoch_loss / max(epoch_tokens, 1)
+        train_loss = epoch_loss / max(epoch_tokens, 1)
         val_loss, val_ppl = evaluate(model, val_loader, device)
 
-        print(f"Epoch {epoch}/{train_config.epochs} | "
-              f"train_loss {avg_loss:.4f} | val_loss {val_loss:.4f} | "
+        print(f"Epoch {epoch} | "
+              f"train_loss {train_loss:.4f} | val_loss {val_loss:.4f} | "
               f"val_ppl {val_ppl:.2f} | {elapsed:.1f}s")
 
         # Save latest checkpoint
@@ -145,7 +141,6 @@ def train(model_config: ModelConfig, train_config: TrainConfig):
             "model_state_dict": model.state_dict(),
             "config": model_config,
             "epoch": epoch,
-            "step": global_step,
             "val_loss": val_loss,
         }, path)
 
@@ -155,10 +150,10 @@ def train(model_config: ModelConfig, train_config: TrainConfig):
             torch.save({
                 "model_state_dict": model.state_dict(),
                 "config": model_config,
-                "step": global_step,
+                "epoch": epoch,
                 "val_loss": val_loss,
             }, best_path)
-            print(f"  [saved] best model -> {best_path}")
+            print(f"  -> new best model (val_loss {val_loss:.4f})")
 
     print(f"\nTraining complete. Best val_loss: {best_val_loss:.4f}")
     return model

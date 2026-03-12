@@ -105,7 +105,7 @@ Charlie.
 
 - GPT-style decoder-only transformer
 - 12 layers, 384 embedding dim, 12 attention heads, 1536 FFN dim, 384 max seq len
-- ~21.5M parameters
+- ~50.7M parameters
 - Weight-tied token embeddings and output head
 
 ## Training

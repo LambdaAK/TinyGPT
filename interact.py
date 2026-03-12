@@ -8,10 +8,11 @@ Usage:
 
 Type messages as the CLIENT. The model generates OUTPUT responses.
 The conversation state accumulates across turns.
-Type 'reset' to clear the conversation, 'quit' to exit.
+Commands: 'reset'/'clear' to clear, 'help' for help, 'quit' to exit.
 """
 
 import argparse
+import sys
 import glob
 import os
 import torch
@@ -22,6 +23,27 @@ from vocabulary import (
     SOS_ID, EOS_ID, OUTPUT_ID, CLIENT_ID, PAD_ID,
     ID_TO_WORD, WORD_TO_ID,
 )
+
+# ANSI color codes
+_CYAN = "\033[36m"
+_GREEN = "\033[32m"
+_YELLOW = "\033[33m"
+_BLUE = "\033[34m"
+_MAGENTA = "\033[35m"
+_BOLD = "\033[1m"
+_DIM = "\033[2m"
+_RESET = "\033[0m"
+
+# Set in main() based on --color flag and TTY
+_use_color = True
+
+def _c(*codes: str) -> str:
+    """Apply ANSI codes; no-op when colors disabled."""
+    return "".join(codes) if _use_color else ""
+
+def _s(text: str, *codes: str) -> str:
+    """Style text with ANSI codes."""
+    return _c(*codes) + text + _c(_RESET) if _use_color else text
 
 
 def list_checkpoints(checkpoint_dir: str = "checkpoints"):
@@ -46,18 +68,21 @@ def pick_checkpoint(checkpoint_dir: str = "checkpoints") -> str:
     """List available checkpoints and let the user pick one."""
     checkpoints = list_checkpoints(checkpoint_dir)
     if not checkpoints:
-        print(f"No checkpoints found in {checkpoint_dir}/")
+        print(_s(f"No checkpoints found in {checkpoint_dir}/", _YELLOW))
         raise SystemExit(1)
 
-    print("Available checkpoints:\n")
+    print(_s("Available checkpoints", _BOLD, _CYAN))
+    print()
     for i, (path, epoch, val_loss) in enumerate(checkpoints):
         name = os.path.basename(path)
-        print(f"  [{i + 1}] {name}  (epoch {epoch}, val_loss {val_loss})")
+        num = _s(f"[{i + 1}]", _BOLD, _BLUE)
+        meta = _s(f"(epoch {epoch}, val_loss {val_loss})", _DIM)
+        print(f"  {num} {name}  {meta}")
     print()
 
     while True:
         try:
-            choice = input(f"Select checkpoint [1-{len(checkpoints)}]: ").strip()
+            choice = input(_s("Select checkpoint ", _DIM) + _s(f"[1-{len(checkpoints)}]", _BLUE) + ": ").strip()
         except (EOFError, KeyboardInterrupt):
             raise SystemExit(0)
         try:
@@ -66,7 +91,7 @@ def pick_checkpoint(checkpoint_dir: str = "checkpoints") -> str:
                 return checkpoints[idx][0]
         except ValueError:
             pass
-        print(f"  Please enter a number between 1 and {len(checkpoints)}")
+        print(_s(f"  Please enter a number between 1 and {len(checkpoints)}", _YELLOW))
 
 
 def load_model(checkpoint_path: str, device: torch.device):
@@ -82,8 +107,8 @@ def load_model(checkpoint_path: str, device: torch.device):
     model.eval()
     epoch = checkpoint.get("epoch", "?")
     val_loss = checkpoint.get("val_loss", "?")
-    print(f"Loaded {os.path.basename(checkpoint_path)} (epoch {epoch}, val_loss {val_loss})")
-    print(f"Parameters: {model.count_parameters():,}")
+    print(_s("Loaded ", _GREEN) + _s(os.path.basename(checkpoint_path), _BOLD) + _s(f" (epoch {epoch}, val_loss {val_loss})", _DIM))
+    print(_s(f"Parameters: {model.count_parameters():,}", _DIM))
     return model, config
 
 
@@ -152,10 +177,18 @@ def main():
                         help="Path to checkpoint (if not set, shows a picker)")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoints",
                         help="Directory to scan for checkpoints")
-    parser.add_argument("--temperature", type=float, default=0.1)
-    parser.add_argument("--top_k", type=int, default=5)
+    parser.add_argument("--temperature", type=float, default=0.1,
+                        help="Sampling temperature (lower = more deterministic)")
+    parser.add_argument("--top_k", type=int, default=5,
+                        help="Top-k sampling")
+    parser.add_argument("--max_tokens", type=int, default=40,
+                        help="Max tokens per response")
     parser.add_argument("--device", type=str, default="auto")
+    parser.add_argument("--no-color", action="store_true", help="Disable colored output")
     args = parser.parse_args()
+
+    global _use_color
+    _use_color = not args.no_color and sys.stdout.isatty()
 
     if args.device == "auto":
         if torch.cuda.is_available():
@@ -169,49 +202,62 @@ def main():
 
     checkpoint_path = args.checkpoint or pick_checkpoint(args.checkpoint_dir)
     model, config = load_model(checkpoint_path, device)
-    print(f"Device: {device}")
+    print(_s(f"Device: {device}", _DIM))
     print()
-    print("TinyGPT Interactive Chat")
-    print("=" * 40)
-    print("You are the CLIENT. Type messages describing")
-    print("who has what, transfers, or ask questions.")
-    print()
-    print("Commands: 'reset' to clear, 'quit' to exit")
-    print("=" * 40)
+    print(_s("TinyGPT Interactive Chat", _BOLD, _MAGENTA))
+    print(_s("=" * 42, _DIM))
+    print(_s("Describe who has what, transfers, or ask questions.", _CYAN))
+    print(_s("Commands: ", _DIM) + "reset/clear, help, quit")
+    print(_s("=" * 42, _DIM))
     print()
 
     turns = []  # List of (client_msg, output_msg)
 
     while True:
         try:
-            user_input = input("CLIENT:\n").strip()
+            user_input = input(_s("You: ", _BOLD, _CYAN)).strip()
         except (EOFError, KeyboardInterrupt):
-            print("\nBye!")
+            print("\n" + _s("Bye!", _GREEN))
             break
 
         if not user_input:
             continue
-        if user_input.lower() == "quit":
-            print("Bye!")
+        cmd = user_input.lower()
+        if cmd == "quit":
+            print(_s("Bye!", _GREEN))
             break
-        if user_input.lower() == "reset":
+        if cmd in ("reset", "clear"):
             turns = []
-            print("[conversation reset]\n")
+            print(_s("[conversation cleared]", _DIM) + "\n")
+            continue
+        if cmd == "help":
+            print()
+            print(_s("Commands:", _BOLD, _CYAN))
+            print("  reset, clear  — clear conversation history")
+            print("  help          — show this message")
+            print("  quit          — exit")
+            print()
+            print(_s("Example:", _BOLD, _CYAN))
+            print(_s("  You:", _CYAN) + " Alice has the ball. Bob has the key.")
+            print(_s("  You:", _CYAN) + " Alice gives the ball to Bob.")
+            print(_s("  You:", _CYAN) + " Who has the ball?")
+            print()
             continue
 
         token_ids = build_conversation_tokens(turns, user_input)
 
+        print(_s("...", _DIM), end="", flush=True)
         response_ids = generate_response(
             model, token_ids, config, device,
             temperature=args.temperature,
             top_k=args.top_k,
+            max_tokens=args.max_tokens,
         )
-
         response_text = detokenize(response_ids, strip_special=True)
         if not response_text.strip():
             response_text = "..."
-
-        print(f"\nOUTPUT:\n{response_text}\n")
+        # Overwrite "..." with response on same line
+        print(f"\r{_s('TinyGPT:', _BOLD, _GREEN)} {response_text}\n")
 
         turns.append((user_input, response_text))
 

@@ -7,7 +7,7 @@ Usage:
     python interact.py --temperature 0.5 --top_k 10
     python interact.py --seed 42
 
-Type messages as the CLIENT. The model generates OUTPUT responses.
+Responses stream token-by-token. Type messages as the CLIENT. The model generates OUTPUT responses.
 The conversation state accumulates across turns.
 Commands: 'reset'/'clear' to clear, 'help' for help, 'quit' to exit.
 """
@@ -24,6 +24,9 @@ from vocabulary import (
     SOS_ID, EOS_ID, OUTPUT_ID, CLIENT_ID, PAD_ID,
     ID_TO_WORD, WORD_TO_ID,
 )
+
+# Punctuation that attaches without leading space
+_PUNCT_NO_SPACE = frozenset(".?,!")
 
 # ANSI color codes
 _CYAN = "\033[36m"
@@ -135,12 +138,15 @@ def build_conversation_tokens(turns, current_client_msg):
     return ids
 
 
-def generate_response(model, token_ids, config, device, temperature=0.8, top_k=20, max_tokens=40):
+def generate_response(model, token_ids, config, device, temperature=0.8, top_k=20, max_tokens=40, on_token=None):
     """Generate model response tokens until CLIENT:, <eos>, or max_tokens.
 
     Unlike TinyGPT.generate(), this function returns only the newly generated
     token IDs (not the full sequence) and treats CLIENT: as a stop token so
     the model doesn't hallucinate the next user turn.
+
+    If on_token(token_id) is provided, it is called with each new token as it
+    is generated, enabling streaming output.
     """
     input_tensor = torch.tensor([token_ids], dtype=torch.long, device=device)
 
@@ -166,6 +172,8 @@ def generate_response(model, token_ids, config, device, temperature=0.8, top_k=2
             if token_id == EOS_ID or token_id == CLIENT_ID:
                 break
 
+            if on_token is not None:
+                on_token(token_id)
             generated.append(token_id)
             input_tensor = torch.cat([input_tensor, next_token], dim=1)
 
@@ -258,18 +266,27 @@ def main():
             if torch.cuda.is_available():
                 torch.cuda.manual_seed_all(args.seed)
 
-        print(_s("...", _DIM), end="", flush=True)
+        first_token = [True]
+
+        def stream_token(token_id):
+            if token_id in (PAD_ID, SOS_ID, EOS_ID):
+                return
+            word = ID_TO_WORD.get(token_id, "<unk>")
+            need_space = not first_token[0] and word not in _PUNCT_NO_SPACE
+            print((" " if need_space else "") + word, end="", flush=True)
+            first_token[0] = False
+        print(_s("TinyGPT:", _BOLD, _GREEN) + " ", end="", flush=True)
         response_ids = generate_response(
             model, token_ids, config, device,
             temperature=args.temperature,
             top_k=args.top_k,
             max_tokens=args.max_tokens,
+            on_token=stream_token,
         )
         response_text = detokenize(response_ids, strip_special=True)
         if not response_text.strip():
-            response_text = "..."
-        # Overwrite "..." with response on same line
-        print(f"\r{_s('TinyGPT:', _BOLD, _GREEN)} {response_text}\n")
+            print(_s("...", _DIM), end="")
+        print()
 
         turns.append((user_input, response_text))
 

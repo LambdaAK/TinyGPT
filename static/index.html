@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TinyGPT</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <button class="new-chat-btn" id="newChatBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+          New chat
+        </button>
+      </div>
+
+      <div class="sidebar-bottom">
+        <div class="settings-section">
+          <button class="settings-toggle" id="settingsToggle">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+            </svg>
+            Settings
+            <span class="chevron" id="chevron">›</span>
+          </button>
+          <div class="settings-body" id="settingsBody">
+            <div class="slider-row">
+              <label>Temperature <span id="tempVal">0.1</span></label>
+              <input type="range" id="temperature" min="0" max="1.5" step="0.05" value="0.1" />
+            </div>
+            <div class="slider-row">
+              <label>Top-k <span id="topkVal">5</span></label>
+              <input type="range" id="topk" min="1" max="50" step="1" value="5" />
+            </div>
+          </div>
+        </div>
+
+        <div class="model-info" id="modelInfo">
+          <span class="model-name">TinyGPT</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main chat area -->
+    <main class="chat-area">
+      <div class="messages" id="messages">
+        <div class="empty-state" id="emptyState">
+          <h1>TinyGPT</h1>
+          <p>A tiny transformer that tracks object possession.<br>
+          Describe who has what, make transfers, then ask questions.</p>
+          <div class="examples">
+            <button class="example-btn" onclick="sendExample('Alice has the ball. Bob has the key. Charlie has the clock.')">
+              Alice has the ball. Bob has the key. Charlie has the clock.
+            </button>
+            <button class="example-btn" onclick="sendExample('Who has the ball?')">
+              Who has the ball?
+            </button>
+            <button class="example-btn" onclick="sendExample('Alice gives the ball to Bob.')">
+              Alice gives the ball to Bob.
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="input-bar">
+        <div class="input-wrapper">
+          <textarea
+            id="userInput"
+            placeholder="Message TinyGPT…"
+            rows="1"
+            autocomplete="off"
+            spellcheck="false"
+          ></textarea>
+          <button class="send-btn" id="sendBtn" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M2 12L22 2 12 22l-2-7-8-3z"/>
+            </svg>
+          </button>
+        </div>
+        <p class="disclaimer">TinyGPT may make mistakes. It only understands a limited vocabulary.</p>
+      </div>
+    </main>
+  </div>
+
+  <script src="/static/script.js"></script>
+</body>
+</html>

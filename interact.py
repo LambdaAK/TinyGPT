@@ -5,6 +5,7 @@ Usage:
     python interact.py
     python interact.py --checkpoint checkpoints/best.pt
     python interact.py --temperature 0.5 --top_k 10
+    python interact.py --seed 42
 
 Type messages as the CLIENT. The model generates OUTPUT responses.
 The conversation state accumulates across turns.
@@ -19,7 +20,7 @@ import torch
 from model import TinyGPT
 from config import ModelConfig
 from vocabulary import (
-    tokenize, detokenize,
+    tokenize, detokenize, is_valid_sentence,
     SOS_ID, EOS_ID, OUTPUT_ID, CLIENT_ID, PAD_ID,
     ID_TO_WORD, WORD_TO_ID,
 )
@@ -184,6 +185,8 @@ def main():
     parser.add_argument("--max_tokens", type=int, default=40,
                         help="Max tokens per response")
     parser.add_argument("--device", type=str, default="auto")
+    parser.add_argument("--seed", type=int, default=None,
+                        help="Random seed for reproducible generation")
     parser.add_argument("--no-color", action="store_true", help="Disable colored output")
     args = parser.parse_args()
 
@@ -244,7 +247,16 @@ def main():
             print()
             continue
 
+        valid, unknown = is_valid_sentence(user_input)
+        if not valid:
+            print(_s(f"Unknown words (will map to <unk>): {', '.join(unknown)}", _YELLOW))
+
         token_ids = build_conversation_tokens(turns, user_input)
+
+        if args.seed is not None:
+            torch.manual_seed(args.seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(args.seed)
 
         print(_s("...", _DIM), end="", flush=True)
         response_ids = generate_response(

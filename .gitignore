@@ -6,8 +6,10 @@ build/
 .eggs/
 
 *.pth
+*.pt
 *.bin
 *.onnx
+checkpoints/
 
 data/
 *.tsv

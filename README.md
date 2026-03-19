@@ -40,6 +40,7 @@ python train.py --batch_size 512 --lr 1e-4
 
 ```bash
 python interact.py
+python interact.py --checkpoint checkpoints/best.pt --temperature 0.5 --no-color
 ```
 
 ### 5. Run tests
@@ -52,54 +53,40 @@ python test_model.py     # quick smoke test
 ## Example conversation
 
 ```
-CLIENT:
-Alice has the ball and 5 apples. Bob has the key. Charlie has the clock and 3 oranges.
+You: Alice has the ball and 5 apples. Bob has the key. Charlie has the clock and 3 oranges.
 
-OUTPUT:
-Got it.
+TinyGPT: Got it.
 
-CLIENT:
-Alice gives the ball to Charlie. Bob gives the key to Alice. Alice gives 2 apples to Bob.
+You: Alice gives the ball to Charlie. Bob gives the key to Alice. Alice gives 2 apples to Bob.
 
-OUTPUT:
-Got it.
+TinyGPT: Got it.
 
-CLIENT:
-Charlie gives the clock to Bob.
+You: Charlie gives the clock to Bob.
 
-OUTPUT:
-Got it.
+TinyGPT: Got it.
 
-CLIENT:
-Who has the ball?
+You: Who has the ball?
 
-OUTPUT:
-Charlie has the ball.
+TinyGPT: Charlie has the ball.
 
-CLIENT:
-What does Alice have?
+You: What does Alice have?
 
-OUTPUT:
-three apples and the key.
+TinyGPT: three apples and the key.
 
-CLIENT:
-How many apples does Bob have?
+You: How many apples does Bob have?
 
-OUTPUT:
-two.
+TinyGPT: two.
 
-CLIENT:
-Bob gives the clock to Alice. Who has the clock now?
+You: Bob gives the clock to Alice. Who has the clock now?
 
-OUTPUT:
-Alice has the clock.
+TinyGPT: Alice has the clock.
 
-CLIENT:
-Who has the most oranges?
+You: Who has the most oranges?
 
-OUTPUT:
-Charlie.
+TinyGPT: Charlie.
 ```
+
+Commands: `reset`/`clear` to clear history, `help` for help, `quit` to exit.
 
 ## Architecture
 

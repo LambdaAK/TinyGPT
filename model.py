@@ -6,7 +6,7 @@ Architecture (GPT-style, pre-norm):
     -> N x [LayerNorm -> CausalSelfAttention -> LayerNorm -> FFN] (residual connections)
     -> LayerNorm -> linear head (weight-tied with token embeddings)
 
-The model is ~6.4M parameters with default config and trains in ~3 minutes on A100.
+The model is ~50.7M parameters with default config and trains in ~15 epochs on A100.
 """
 
 import torch

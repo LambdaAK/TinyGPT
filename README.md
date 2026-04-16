@@ -2,21 +2,39 @@
 
 A small decoder-only transformer trained from scratch to track object possession across multi-turn conversations. Given statements like "Alice has the ball" and "Alice gives the ball to Bob", it answers questions like "Who has the ball?" correctly.
 
-## Quickstart
+## Run Modes (Choose One)
 
-### 1. Install dependencies
+This project can be run in four different ways:
+
+1. Train + CLI chat (`interact.py`) without Redis/web server.
+2. Local web serving stack (FastAPI + Redis + worker).
+3. Docker Compose (API + Redis + worker containers).
+4. Kubernetes on Minikube (namespace + deployments + services).
+
+## Prerequisites
+
+- Python 3.11
+- A trained checkpoint at `checkpoints/best.pt` for any inference mode (web/API/worker)
+- Redis (only for serving modes 2/3/4)
+- Docker Desktop (for modes 3/4)
+- Minikube + kubectl (for mode 4)
+
+## 1) Train + CLI Chat (No Redis)
+
+### Install dependencies
 
 ```bash
-pip install -r requirements.txt
+cd /Users/alex/Desktop/TinyGPT
+python -m pip install -r requirements.txt
 ```
 
-### 2. Generate training data
+### Generate training data
 
 ```bash
 python data_generator.py --train 300000 --val 2000 --test 2000 --outdir data
 ```
 
-### 3. Train
+### Train model
 
 If you get a `libcuda.so cannot found` error from `torch.compile`, refresh the linker cache first:
 
@@ -36,62 +54,126 @@ To customize batch size or learning rate:
 python train.py --batch_size 512 --lr 1e-4
 ```
 
-### 4. Chat with the model
+### Chat in terminal
 
 ```bash
 python interact.py
 python interact.py --checkpoint checkpoints/best.pt --temperature 0.5 --no-color
 ```
 
-### 5. Run tests
+### Run tests
 
 ```bash
 python run_examples.py   # full 22-test suite
 python test_model.py     # quick smoke test
 ```
 
-## Redis Serving Mode (API + Worker)
+### Stop/Cleanup
 
-Run the web app in production-style mode with a Redis queue and a separate inference worker.
+Stop running commands with `Ctrl+C`.
 
-### 1. Start Redis (Homebrew)
+Optional cleanup (generated training data + checkpoints):
+
+```bash
+rm -rf data checkpoints
+```
+
+## 2) Local Web App (FastAPI + Redis + Worker)
+
+Run this when you want the browser UI (`/`) and streaming responses.
+
+### Terminal 1: Start Redis
 
 ```bash
 brew services start redis
 redis-cli ping
 ```
 
-### 2. Start the worker
+Expected output: `PONG`
+
+### Terminal 2: Start worker
 
 ```bash
 python worker.py --redis_url redis://127.0.0.1:6379/0
 ```
 
-### 3. Start the API/web server
+### Terminal 3: Start API/web server
 
 ```bash
 python app.py --host 0.0.0.0 --port 8000 --redis_url redis://127.0.0.1:6379/0
 ```
 
-Open `http://localhost:8000`.
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
 
-### Optional: Docker Compose
+### Optional load test (local stack)
 
 ```bash
-docker compose up --build
+python scripts/load_test.py --base-url http://127.0.0.1:8000 --users 10 --requests-per-user 10
 ```
 
-## Kubernetes (Minikube)
+### Stop/Cleanup
 
-### 1. Build and load the image into Minikube
+- In API and worker terminals: `Ctrl+C`
+- Stop Redis service:
+
+```bash
+brew services stop redis
+```
+
+## 3) Docker Compose
+
+This runs Redis, API, and worker together in containers.
 
 ```bash
 cd /Users/alex/Desktop/TinyGPT
-docker build -t tinygpt:latest .
-minikube image load tinygpt:latest
+docker compose up --build
 ```
 
-### 2. Deploy core services (Redis + API + worker)
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
+
+Useful compose commands:
+
+```bash
+docker compose ps
+docker compose logs -f api
+docker compose logs -f worker
+docker compose down
+```
+
+### Stop/Cleanup
+
+Stop containers:
+
+```bash
+docker compose down
+```
+
+Stop + remove volumes (clears Redis data in compose):
+
+```bash
+docker compose down -v
+```
+
+## 4) Kubernetes (Minikube)
+
+### Start local cluster
+
+```bash
+cd /Users/alex/Desktop/TinyGPT
+minikube start --driver=docker --cpus=3 --memory=4096
+kubectl config use-context minikube
+kubectl get nodes
+```
+
+### Build image inside Minikube Docker daemon
+
+```bash
+eval $(minikube docker-env)
+DOCKER_BUILDKIT=0 docker build -t tinygpt:latest .
+eval $(minikube docker-env -u)
+```
+
+### Deploy manifests
 
 ```bash
 kubectl apply -k k8s/
@@ -99,50 +181,129 @@ kubectl get pods -n tinygpt
 kubectl get svc -n tinygpt
 ```
 
-### 3. Access the API
+Wait until `tinygpt-api`, `tinygpt-worker`, and `tinygpt-redis` are `1/1 Running`.
 
-Use port-forward:
+### Access API
 
 ```bash
 kubectl port-forward -n tinygpt svc/tinygpt-api 8000:8000
 ```
 
-Then open `http://127.0.0.1:8000`.
+Then open [http://127.0.0.1:8000](http://127.0.0.1:8000).
 
-### 4. Scale workers
+### Scale worker replicas
 
 ```bash
 kubectl scale -n tinygpt deploy/tinygpt-worker --replicas=2
 ```
 
-### 5. Optional ingress
+### Optional ingress
 
 ```bash
 minikube addons enable ingress
 kubectl apply -f k8s/optional/ingress.yaml
 ```
 
-Add this hosts entry:
+Add this to `/etc/hosts`:
 
 ```text
-$(minikube ip) tinygpt.local
+<MINIKUBE_IP> tinygpt.local
 ```
 
-Then open `http://tinygpt.local`.
+Get `<MINIKUBE_IP>` with:
 
-### 6. Teardown
+```bash
+minikube ip
+```
+
+Then open [http://tinygpt.local](http://tinygpt.local).
+
+### Teardown
+
+```bash
+kubectl delete -k k8s/
+minikube stop
+```
+
+### Stop/Cleanup
+
+Stop port-forward with `Ctrl+C`.
+
+Delete only app resources:
 
 ```bash
 kubectl delete -k k8s/
 ```
 
-### Load test (100 concurrent users)
+Stop cluster:
+
+```bash
+minikube stop
+```
+
+Delete cluster entirely:
+
+```bash
+minikube delete
+```
+
+## Load Test Example (100x100)
 
 ```bash
 python scripts/load_test.py --base-url http://127.0.0.1:8000 --users 100 --requests-per-user 100
 ```
 
 This reports latency percentiles, throughput, and average batch size from worker stats.
+
+## Troubleshooting
+
+### `No checkpoint found...`
+
+You must train first (or copy an existing checkpoint to `checkpoints/best.pt`):
+
+```bash
+python data_generator.py --train 300000 --val 2000 --outdir data
+python train.py
+```
+
+### `ImagePullBackOff` in Kubernetes
+
+Image is not in Minikube's local Docker cache. Rebuild into Minikube and restart:
+
+```bash
+eval $(minikube docker-env)
+DOCKER_BUILDKIT=0 docker build -t tinygpt:latest .
+eval $(minikube docker-env -u)
+kubectl rollout restart -n tinygpt deployment/tinygpt-api deployment/tinygpt-worker
+kubectl get pods -n tinygpt
+```
+
+### `no space left on device` or Docker `input/output error`
+
+Docker Desktop disk is full/corrupted. Free space, restart Docker Desktop, then retry build/start.
+
+### Load test says `Connection refused`
+
+API is not reachable on `127.0.0.1:8000`. Check:
+
+```bash
+curl http://127.0.0.1:8000/info
+```
+
+If on Kubernetes, make sure `kubectl port-forward -n tinygpt svc/tinygpt-api 8000:8000` is running.
+
+## Full Cleanup (Everything)
+
+If you want to fully reset local project runtime artifacts:
+
+```bash
+cd /Users/alex/Desktop/TinyGPT
+docker compose down -v 2>/dev/null || true
+kubectl delete -k k8s/ 2>/dev/null || true
+minikube delete 2>/dev/null || true
+brew services stop redis 2>/dev/null || true
+rm -rf data checkpoints
+```
 
 ## Example conversation
 

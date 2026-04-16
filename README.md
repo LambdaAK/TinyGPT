@@ -6,10 +6,10 @@ A small decoder-only transformer trained from scratch to track object possession
 
 This project can be run in four different ways:
 
-1. Train + CLI chat (`interact.py`) without Redis/web server.
-2. Local web serving stack (FastAPI + Redis + worker).
-3. Docker Compose (API + Redis + worker containers).
-4. Kubernetes on Minikube (namespace + deployments + services).
+1. Train + CLI chat (`interact.py`): run the model directly in your terminal with no Redis or web server; best for quick model iteration.
+2. Local web serving stack (FastAPI + Redis + worker): run API, queue, and worker as separate local processes to test streaming and batching behavior.
+3. Docker Compose (API + Redis + worker containers): run the same serving stack as containers for reproducible local setup.
+4. Kubernetes on Minikube (namespace + deployments + services): run the stack with Kubernetes orchestration for scaling, rollouts, and production-style workflow.
 
 ## Prerequisites
 
